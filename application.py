@@ -6,23 +6,26 @@ import numpy as np
 import plotly.graph_objects as go
 from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
+from loguru import logger
+import os
 
 RESOLUTION = (1_000, 1_000)
 MAX_ITERATIONS = 2_000
 
 INITIAL_LIMITS = [-2.5, 1.5, -2, 2]
 
-GL = False
+GL = True
 
-app = dash.Dash("Mandelbrot")
-
+app = dash.Dash("Mandelbrot", suppress_callback_exceptions=True)
+app.title = "Mandelbrot"
+server = app.server
 
 def get_axis_limits(x_or_y, new_data):
-    key = f'{x_or_y}axis.range'
+    key = f"{x_or_y}axis.range"
     if key in new_data:
         return new_data[key]
-    elif key + '[0]' in new_data:
-        return new_data[key+'[0]'], new_data[key+'[1]']
+    elif key + "[0]" in new_data:
+        return new_data[key + "[0]"], new_data[key + "[1]"]
     else:
         return None
 
@@ -30,17 +33,20 @@ def get_axis_limits(x_or_y, new_data):
 @app.callback(
     Output("graph", "figure"),
     [Input("graph", "relayoutData")],
-    [State("graph", "figure")]
+    [State("graph", "figure")],
 )
 def on_zoom(new_data, current_figure):
     if not (isinstance(new_data, dict)):
         raise PreventUpdate
 
-    x_lims = get_axis_limits('x', new_data)
-    y_lims = get_axis_limits('y', new_data)
+    x_lims = get_axis_limits("x", new_data)
+    y_lims = get_axis_limits("y", new_data)
 
     if x_lims is None and y_lims is None:
-        if new_data.get('xaxis.autorange') is True and new_data.get('yaxis.autorange') is True:
+        if (
+            new_data.get("xaxis.autorange") is True
+            and new_data.get("yaxis.autorange") is True
+        ):
             # Reset
             return get_figure(*INITIAL_LIMITS)
         else:
@@ -49,14 +55,16 @@ def on_zoom(new_data, current_figure):
         if x_lims is not None:
             x_min, x_max = x_lims
         else:
-            x_min, x_max = current_figure['layout']['xaxis']['range']
+            x_min, x_max = current_figure["layout"]["xaxis"]["range"]
 
         if y_lims is not None:
             y_min, y_max = y_lims
         else:
-            y_min, y_max = current_figure['layout']['yaxis']['range']
+            y_min, y_max = current_figure["layout"]["yaxis"]["range"]
 
-    return get_figure(x_min, x_max, y_min, y_max)
+    data = get_figure(x_min, x_max, y_min, y_max)
+    current_figure.update({'data': data['data']})
+    return current_figure
 
 
 @numba.njit(parallel=True)
@@ -74,10 +82,10 @@ def get_n_iterations(x_min, x_max, y_min, y_max):
             z_x = 0
             z_y = 0
             for it in range(MAX_ITERATIONS):
-                xtemp = z_x*z_x - z_y*z_y + c_x
+                xtemp = z_x * z_x - z_y * z_y + c_x
                 z_y = 2 * z_x * z_y + c_y
                 z_x = xtemp
-                if z_x*z_x + z_y*z_y > 4:
+                if z_x * z_x + z_y * z_y > 4:
                     break
             if it:
                 n_iterations[yi][xi] = it
@@ -96,33 +104,33 @@ def get_figure(x_min, x_max, y_min, y_max):
                 x=x,
                 y=y,
                 showscale=False,
-                hoverinfo='none',
-                zsmooth=False
+                hoverinfo="none",
+                zsmooth=False,
             )
         ],
         layout={
-            'margin': {'t': 0, 'b': 0, 'l': 0, 'r': 0},
-            'xaxis': {'showticklabels': False},
-            'yaxis': {'showticklabels': False},
-            "hovermode": False
-        }
+            "margin": {"t": 0, "b": 0, "l": 0, "r": 0},
+            "xaxis": {"showticklabels": False},
+            "yaxis": {"showticklabels": False},
+            "hovermode": False,
+        },
     )
 
 
 app.layout = html.Div(
     id="main_div",
     children=dcc.Graph(
-        id='graph',
+        id="graph",
         style={"width": "100%", "height": "100%"},
         figure=get_figure(*INITIAL_LIMITS),
-        config={'scrollZoom': True}
+        config={"scrollZoom": True},
     ),
     style={
         "width": "calc(100vw - 16px)",
         "height": "calc(100vh - 16px)",
-        'margin': {'t': 0, 'b': 0, 'l': 0, 'r': 0},
+        "margin": {"t": 0, "b": 0, "l": 0, "r": 0},
     },
 )
 
-if __name__ == '__main__':
-    app.run_server(debug=False, host="localhost")
+if __name__ == "__main__":
+    server.run(debug=False, port=os.environ.get("PORT", 8080))

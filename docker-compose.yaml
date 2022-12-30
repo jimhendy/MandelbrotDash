@@ -1,0 +1,22 @@
+version: "3.7"
+
+services:
+
+  mandelbrot:
+    container_name: ${CONTAINER_NAME}
+    restart: unless-stopped
+    build: .
+    environment:
+      - PORT=${PORT}
+      - VIRTUAL_PORT=${PORT}
+      - VIRTUAL_HOST=${CONTAINER_NAME}.jimhendy.com
+      - LETSENCRYPT_HOST=${CONTAINER_NAME}.jimhendy.com
+      - VIRTUAL_MAX_UPLOAD=20m  # Doesn't work: Try https://github.com/nginx-proxy/nginx-proxy/issues/690
+    networks: 
+      - reverse-proxy-net
+    ports:
+      - ${PORT}:${PORT}
+
+networks:
+  reverse-proxy-net:
+    external: true

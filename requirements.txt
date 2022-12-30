@@ -1,0 +1,5 @@
+dash
+numba
+plotly
+gunicorn
+loguru
