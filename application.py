@@ -4,13 +4,15 @@ import dash_html_components as html
 import numba
 import numpy as np
 import plotly.graph_objects as go
+import plotly.express as px
 from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 from loguru import logger
 import os
 
-RESOLUTION = (1_000, 1_000)
-MAX_ITERATIONS = 2_000
+RESOLUTION = (1_500, 1_500)
+MAX_ITERATIONS = 1_500
+NORM_FUNC = np.log
 
 INITIAL_LIMITS = [-2.5, 1.5, -2, 2]
 
@@ -48,7 +50,7 @@ def on_zoom(new_data, current_figure):
             and new_data.get("yaxis.autorange") is True
         ):
             # Reset
-            return get_figure(*INITIAL_LIMITS)
+            return im_show(*INITIAL_LIMITS)
         else:
             raise PreventUpdate
     else:
@@ -60,12 +62,9 @@ def on_zoom(new_data, current_figure):
         if y_lims is not None:
             y_min, y_max = y_lims
         else:
-            y_min, y_max = current_figure["layout"]["yaxis"]["range"]
-
-    data = get_figure(x_min, x_max, y_min, y_max)
-    current_figure.update({'data': data['data']})
-    return current_figure
-
+            y_min, y_max = current_figure['layout']['yaxis']['range']
+    logger.info("Calculation complete")
+    return im_show(x_min, x_max, y_min, y_max)
 
 @numba.njit(parallel=True)
 def get_n_iterations(x_min, x_max, y_min, y_max):
@@ -93,37 +92,27 @@ def get_n_iterations(x_min, x_max, y_min, y_max):
     return x, y, n_iterations
 
 
-def get_figure(x_min, x_max, y_min, y_max):
+def im_show(x_min, x_max, y_min, y_max):
     x, y, n_iterations = get_n_iterations(x_min, x_max, y_min, y_max)
-    hm = go.Heatmapgl if GL else go.Heatmap
-
-    return go.Figure(
-        data=[
-            hm(
-                z=np.log(n_iterations),
-                x=x,
-                y=y,
-                showscale=False,
-                hoverinfo="none",
-                zsmooth=False,
-            )
-        ],
-        layout={
-            "margin": {"t": 0, "b": 0, "l": 0, "r": 0},
-            "xaxis": {"showticklabels": False},
-            "yaxis": {"showticklabels": False},
-            "hovermode": False,
-        },
+    z = NORM_FUNC(n_iterations)
+    fig = px.imshow(z, origin='lower', binary_string=True, zmin=z.min(), zmax=z.max(), x=x, y=y, binary_compression_level=8)
+    fig.update_layout(
+        margin = {'t': 0, 'b': 0, 'l': 0, 'r': 0},
+        autosize=True,
+        coloraxis_showscale=False,
+        xaxis = {'showticklabels': False},
+        yaxis = {'showticklabels': False},
+        hovermode = False
     )
-
+    return fig
 
 app.layout = html.Div(
     id="main_div",
     children=dcc.Graph(
         id="graph",
         style={"width": "100%", "height": "100%"},
-        figure=get_figure(*INITIAL_LIMITS),
-        config={"scrollZoom": True},
+        figure=im_show(*INITIAL_LIMITS),
+        config={'scrollZoom': True}
     ),
     style={
         "width": "calc(100vw - 16px)",
